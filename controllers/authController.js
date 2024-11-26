@@ -5,9 +5,9 @@ const User = require('../models/User');
 require('dotenv').config();
 
 
-const JWT_SECRET = process.env.JWT_SECRET;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 
 
@@ -47,45 +47,43 @@ exports.login = async (req, res) => {
   const { email, password, isAdmin } = req.body;
 
   try {
-    // Check if admin is logging in
     if (isAdmin) {
+      // Admin login
       if (email !== ADMIN_EMAIL) {
-        return res.status(404).json({ error: 'Admin not found!' });
+        return res.status(404).json({ error: "Admin not found!" });
       }
 
       if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ error: 'Invalid admin credentials!' });
+        return res.status(401).json({ error: "Invalid admin credentials!" });
       }
 
       const token = jwt.sign(
-        { id: 'admin', email, isAdmin: true },
+        { id: "admin", email, isAdmin: true },
         JWT_SECRET,
-        { expiresIn: '1h' }
+        { expiresIn: "1h" }
       );
 
-      return res.json({ token });
+      return res.json({ token, isAdmin: true });
     }
 
-    // Check regular user login
+    // Regular user login
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'User not found!' });
+    if (!user) return res.status(404).json({ error: "User not found!" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: 'Invalid credentials!' });
+    if (!isMatch) return res.status(401).json({ error: "Invalid credentials!" });
 
     const token = jwt.sign(
       { id: user._id, email: user.email, isAdmin: false },
       JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: "1h" }
     );
 
-    res.json({ token });
+    return res.json({ token, isAdmin: false, user });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
-
-
 
 exports.fetchUser = async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
