@@ -29,9 +29,9 @@ exports.signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    
+
     await User.create({ name, email, password: hashedPassword });
-    
+
     res.status(201).json({ message: 'Signup successful!' });
 
   } catch (error) {
@@ -60,7 +60,7 @@ exports.login = async (req, res) => {
       const token = jwt.sign(
         { id: "admin", email, isAdmin: true },
         JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "7d" }
       );
 
       return res.json({ token, isAdmin: true });
@@ -76,7 +76,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, email: user.email, isAdmin: false },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "7d" }
     );
 
     return res.json({ token, isAdmin: false, user });
@@ -93,13 +93,14 @@ exports.fetchUser = async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    if (decoded.isAdmin) {
-      return res.json({ user: { email: ADMIN_EMAIL, role: "admin" } });
-    } else {
-      const user = await User.findById(decoded.id);
-      if (!user) return res.status(404).json({ error: "User not found!" });
-      return res.json({ user });
-    }
+    const user = decoded.isAdmin
+      ? { email: ADMIN_EMAIL, name: "Admin", role: "admin" }
+      : await User.findById(decoded.id);
+
+    if (!user) return res.status(404).json({ error: 'User not found!' });
+
+    res.json({ user });
+
   } catch (error) {
     res.status(401).json({ error: "Unauthorized!" });
   }

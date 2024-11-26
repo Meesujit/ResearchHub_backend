@@ -13,7 +13,7 @@ router.post('/signup', signup);
 router.post('/login', login);
 
 // Get Current User
-router.get('/me', fetchUser);
+router.get('/profile', fetchUser);
 
 
 module.exports = router;
