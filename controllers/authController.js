@@ -1,108 +1,79 @@
-const bcrypt = require('bcrypt');
+const User = require('../models/userModel');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-require('dotenv').config();
+const register = async (req, res) => {
+    try {        
+        const {username, email, password, role} = req.body;
+        
+        const userExists = await User.findOne({email});
+        if(userExists) {
+            return res.status(400).json({message: `User already exists with email: ${email}`});
+        }
 
+        const hashedPassword = await bcrypt.hash(password, 8);
+        
+        const newUser = new User({username, email, password: hashedPassword, role: role || 'user'});
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const JWT_SECRET = process.env.JWT_SECRET;
+        await newUser.save();
 
-
-
-exports.signup = async (req, res) => {
-  const { name, email, password } = req.body;
-
-  try {
-    // Check if the user already exists
-    try {
-      const existingUser = await User.findOne({ email });
-      res.json(existingUser);
-
-      if (existingUser) {
-        return res.status(400).json({ message: 'User already exists' });
-      }
+        res.status(201).json({message: `User registered with username: ${username} and email: ${email}`});
+        
     } catch (error) {
-      return res.status(400).json({ error: error.message });
+        res.status(500).json({message: `something went wrong ${error.message}`});
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-
-    await User.create({ name, email, password: hashedPassword });
-
-    res.status(201).json({ message: 'Signup successful!' });
-
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-
 }
 
+const login = async (req, res) => {
+    try {
+        const {email, password} = req.body;
+        const user = await User.findOne({email});
+        if(!user) {
+            return res.status(404).json({message: `User not found ${email}`});
+        }
 
+        const isMatch = await bcrypt.compare(password, user.password);
 
+        if(!isMatch) {
+            return res.status(400).json({message: `Invalid credentials`});
+        }
 
-exports.login = async (req, res) => {
-  const { email, password, isAdmin } = req.body;
+        // if(user.role === 'user' && !user.isApproved) return res.status(403).json({message: `Admin approve is pending`});
+        // if(!user.isApproved) return res.status(403).json({message: `Admin approve is pending`});
+        
+        const token = jwt.sign(
+            {
+                _id: user._id,
+                role: user.role,
+            }, 
+            process.env.JWT_SECRET, 
+            {
+                expiresIn: process.env.JWT_EXPIRE
+            });
+        
 
-  try {
-    if (isAdmin) {
-      // Admin login
-      if (email !== ADMIN_EMAIL) {
-        return res.status(404).json({ error: "Admin not found!" });
-      }
+            res.status(200).json({
+                message: `User logged in with email: ${email}`,
+                _id: user._id,
+                role: user.role,
+                token: token,
+                username: user.username,
+                email: user.email,
 
-      if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ error: "Invalid admin credentials!" });
-      }
-
-      const token = jwt.sign(
-        { id: "admin", email, isAdmin: true },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      return res.json({ token, isAdmin: true });
+    });
+        
+    } catch (error) {
+        res.status(500).json({message: `something went wrong ${error.message}, Server Error`});
     }
+}
 
-    // Regular user login
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "User not found!" });
+const logout = (req, res) => {
+    res.clearCookie("token");
+    res.status(200).json({message: `User logged out`});
+}
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: "Invalid credentials!" });
-
-    const token = jwt.sign(
-      { id: user._id, email: user.email, isAdmin: false },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    return res.json({ token, isAdmin: false, user });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-exports.fetchUser = async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!token) return res.status(401).json({ error: "Unauthorized!" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    const user = decoded.isAdmin
-      ? { email: ADMIN_EMAIL, name: "Admin", role: "admin" }
-      : await User.findById(decoded.id);
-
-    if (!user) return res.status(404).json({ error: 'User not found!' });
-
-    res.json({ user });
-
-  } catch (error) {
-    res.status(401).json({ error: "Unauthorized!" });
-  }
-};
-
+module.exports = {
+    register,
+    login,
+    logout,
+}
