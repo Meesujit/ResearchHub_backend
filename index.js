@@ -9,12 +9,24 @@ const eventRoutes = require('./routes/eventRoutes');
 const app = express();
 connectDB();
 
+const allowedOrigins = [
+    "http://localhost:4000",                 // Dev
+    "https://researchhub-two.vercel.app"       // Replace with your actual Vercel domain
+];
 
 //Middleware
 app.use(express.json());
 app.use(cookieParser());
+
 app.use(cors({
-    origin: "http://localhost:4000",
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }));
 
